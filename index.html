@@ -1,0 +1,290 @@
+<!doctype html>
+<html lang="en">
+
+    <head>
+        <meta charset="utf-8">
+
+        <title>Building &amp; Deploying Reactive Service Pipelines</title>
+
+        <meta name="description" content="Composition of micro-service is a modern integration pattern that couples nicely with Reactive and Continuous Delivery. These paradigms enable small teams to move quickly while integrating cross-silo data stores for modern JavaScript UIs and REST services. This session will use Scala, Play Framework, and Heroku to illustrate how to build and deploy Reactive Service Pipelines.">
+        <meta name="author" content="James Ward">
+
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
+        <link rel="stylesheet" href="css/reveal.min.css">
+        <link rel="stylesheet" href="css/theme/default.css" id="theme">
+
+        <!-- For syntax highlighting -->
+        <link rel="stylesheet" href="lib/css/zenburn.css">
+
+        <style>
+            .reveal section img {
+                border: none;
+            }
+        </style>
+
+        <!-- If the query includes 'print-pdf', include the PDF print sheet -->
+        <script>
+            if( window.location.search.match( /print-pdf/gi ) ) {
+                var link = document.createElement( 'link' );
+                link.rel = 'stylesheet';
+                link.type = 'text/css';
+                link.href = 'css/print/pdf.css';
+                document.getElementsByTagName( 'head' )[0].appendChild( link );
+            }
+        </script>
+
+        <!--[if lt IE 9]>
+        <script src="lib/js/html5shiv.js"></script>
+        <![endif]-->
+    </head>
+
+    <body>
+
+        <div class="reveal">
+
+            <div class="slides">
+                <section>
+                    <h4>Building &amp; Deploying Reactive Service Pipelines</h4>
+                    <p>
+                        <small><a href="http://jamesward.com">James Ward</a> / <a href="http://twitter.com/_JamesWard">@_JamesWard</a></small>
+                    </p>
+                </section>
+
+                <section>
+                    <section>
+                        <h2>Users Want</h2>
+                        <ul>
+                            <li class="fragment">In-Sync Data</li>
+                            <li class="fragment">Real-time Collaboration</li>
+                            <li class="fragment">Instant Feedback</li>
+                            <li class="fragment">To Not Wait</li>
+                        </ul>
+                    </section>
+                    <section data-markdown>
+                        <script type="text/template">
+                            ## Users Want Reactive Apps
+                            ### [www.ReactiveManifesto.org](http://www.reactivemanifesto.org)
+
+                            ![](assets/full-reactive.png)
+                        </script>
+                    </section>
+                </section>
+                <section>
+                    <section data-markdown>
+                        <script type="text/template">
+                            #### Blocking Request
+
+                            ```
+                            def foo = Action {
+                              Ok("foo")
+                            }
+                            ```
+
+                            ![](assets/reactive-requests.png)
+
+                            #### Async Request
+
+                            ```
+                            def foo = Action.async {
+                              Future.successful(Ok("foo"))
+                            }
+                            ```
+                        </script>
+                    </section>
+                    <section data-markdown>
+                        <script type="text/template">
+                            #### Reactive Request (Async + Non-Blocking)
+
+                            ```
+                            def pause(duration: Int) = Action.async {
+                              Promise.timeout(Ok(duration.toString), duration seconds)
+                            }
+                            ```
+
+                            #### Reactive WS Client
+
+                            ```
+                            val f: Future[Response] = WS.url("http://www.foo.com").get
+                            ```
+                        </script>
+                    </section>
+                    <section data-markdown>
+                        <script type="text/template">
+                            #### Reactive Composition
+
+                            ```
+                            def foo = Action.async {
+                              val futureResponse = WS.url("http://www.foo.com").get
+                              futureResponse.map { response =>
+                                Ok(response.body)
+                              }
+                            }
+                            ```
+                        </script>
+                    </section>
+                    <section data-markdown>
+                        <script type="text/template">
+                            #### Reactive Composition
+
+                            ```
+                            def foo = Action.async {
+                              val futureJW = WS.url("http://www.jamesward.com").get
+                              val futureTwitter = WS.url("http://www.twitter.com").get
+                              for {
+                                jw <- futureJW
+                                twitter <- futureTwitter
+                              } yield Ok(jw.response.body + twitter.response.body)
+                            }
+                            ```
+                        </script>
+                    </section>
+                </section>
+
+                <section>
+                    <section>
+                        <h3>Service Pipelines</h3>
+
+                        <small class="fragment">Not SOA because it's not SOAP and doesn't have UDDI (yet)</small>
+
+                        <ul>
+                            <li class="fragment">Data Transformation, Aggregation, Validation</li>
+                            <li class="fragment">Composable, Failable, Distributable</li>
+                            <li class="fragment"><b>Single Responsibility Principal</b> or more practically...<br/> <b>Do as little as possible</b></li>
+                            <li class="fragment">Categorically Grouped Deployables</li>
+                        </ul>
+                    </section>
+                    <section>
+                        <h3>Twitter Search Sentiment Service</h3>
+
+                        <ul>
+                            <li>Twitter Search Service</li>
+                            <li>Twitter Search Proxy</li>
+                            <li>Sentiment Service</li>
+                        </ul>
+                    </section>
+                    <section data-markdown>
+                        <script type="text/template">
+                            #### Query Tweets
+
+                            ```
+                            val stp = "http://search-twitter-proxy.herokuapp.com/search/tweets"
+
+                            WS.url(stp).withQueryString("q" -> query).get().flatMap { tweetsResponse =>
+                              ???
+                            }
+                            ```
+                        </script>
+                    </section>
+                    <section data-markdown>
+                        <script type="text/template">
+                            #### Get Tweet JsObjects
+
+                            ```
+                            val tweets = (tweetsResponse.json \ "statuses").as[Seq[JsObject]]
+                            ```
+                        </script>
+                    </section>
+                    <section data-markdown>
+                        <script type="text/template">
+                            #### Get Sentiment For Each Tweet
+
+                            ```
+                            val s = "http://text-processing.com/api/sentiment/"
+                            val tweetsSentimentFutures = tweets.map { tweet =>
+                              val text = (tweet \ "text").as[String]
+                              (tweet, WS.url(s).post(Map("text" -> Seq(text))).map(_.json.as[JsObject]))
+                            }
+                            ```
+                        </script>
+                    </section>
+                    <section data-markdown>
+                        <script type="text/template">
+                            #### Wrap Up The Futures
+
+                            ```
+                            val tweetsSentimentFuture = Future.traverse(tweetsSentimentFutures) { tsf =>
+                              tsf._2.map(_ ++ tsf._1)
+                            }
+                            ```
+                        </script>
+                    </section>
+                    <section data-markdown>
+                        <script type="text/template">
+                            #### When Everything is Done Return the Response
+
+                            ```
+                            tweetsSentimentFuture.map { tweetsWithSentiment =>
+                              Ok(Json.toJson(tweetsWithSentiment))
+                            }
+                            ```
+                        </script>
+                    </section>
+                </section>
+
+                <section data-markdown>
+                    <script type="text/template">
+                        ### Deploy the Reactive Service Pipeline
+
+                        ```
+                        git init
+                        git add .
+                        git commit -m init
+                        heroku create
+                        git push heroku master
+                        ```
+                    </script>
+                </section>
+
+                <section>
+                    <h2>Further Learning</h2>
+
+                    <ul>
+                        <li>Activator Templates: <a href="http://typesafe.com/activator/template/reactive-maps">Reactive Maps</a> | <a href="http://typesafe.com/activator/template/reactive-stocks">Reactive Stocks</a></li>
+                        <li><a href="http://www.reactive-streams.org/">Reactive Streams</a></li>
+                        <li>Coursera: <a href="https://www.coursera.org/course/reactive">Principals of Reactive Programming</a></li>
+                    </ul>
+                </section>
+
+            </div>
+
+        </div>
+
+        <script src="lib/js/head.min.js"></script>
+        <script src="js/reveal.min.js"></script>
+
+        <script>
+
+            // Full list of configuration options available here:
+            // https://github.com/hakimel/reveal.js#configuration
+            Reveal.initialize({
+                controls: false,
+                progress: true,
+                history: true,
+                center: true,
+
+                theme: "simple", // available themes are in /css/theme
+                transition: 'none', // default/cube/page/concave/zoom/linear/fade/none
+
+                // Parallax scrolling
+                // parallaxBackgroundImage: 'https://s3.amazonaws.com/hakim-static/reveal-js/reveal-parallax-1.jpg',
+                // parallaxBackgroundSize: '2100px 900px',
+
+                // Optional libraries used to extend on reveal.js
+                dependencies: [
+                    { src: 'lib/js/classList.js', condition: function() { return !document.body.classList; } },
+                    { src: 'plugin/markdown/marked.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+                    { src: 'plugin/markdown/markdown.js', condition: function() { return !!document.querySelector( '[data-markdown]' ); } },
+                    { src: 'plugin/highlight/highlight.js', async: true, callback: function() { hljs.initHighlightingOnLoad(); } },
+                    { src: 'plugin/zoom-js/zoom.js', async: true, condition: function() { return !!document.body.classList; } },
+                    { src: 'plugin/notes/notes.js', async: true, condition: function() { return !!document.body.classList; } }
+                ]
+            });
+
+        </script>
+
+    </body>
+</html>
