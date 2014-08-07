@@ -78,7 +78,7 @@
                         <script type="text/template">
                             #### Blocking Request
 
-                            ```
+                            ```scala
                             def foo = Action {
                               Ok("foo")
                             }
@@ -88,7 +88,7 @@
 
                             #### Async Request
 
-                            ```
+                            ```scala
                             def foo = Action.async {
                               Future.successful(Ok("foo"))
                             }
@@ -99,7 +99,7 @@
                         <script type="text/template">
                             #### Reactive Request (Async + Non-Blocking)
 
-                            ```
+                            ```scala
                             def pause(duration: Int) = Action.async {
                               Promise.timeout(Ok(duration.toString), duration seconds)
                             }
@@ -107,7 +107,7 @@
 
                             #### Reactive WS Client
 
-                            ```
+                            ```scala
                             val f: Future[Response] = WS.url("http://www.foo.com").get
                             ```
                         </script>
@@ -116,7 +116,7 @@
                         <script type="text/template">
                             #### Reactive Composition
 
-                            ```
+                            ```scala
                             def foo = Action.async {
                               val futureResponse = WS.url("http://www.foo.com").get
                               futureResponse.map { response =>
@@ -130,7 +130,7 @@
                         <script type="text/template">
                             #### Reactive Composition
 
-                            ```
+                            ```scala
                             def foo = Action.async {
                               val futureJW = WS.url("http://www.jamesward.com").get
                               val futureTwitter = WS.url("http://www.twitter.com").get
@@ -168,58 +168,19 @@
                     </section>
                     <section data-markdown>
                         <script type="text/template">
-                            #### Query Tweets
-
-                            ```
+                            ```scala
                             val stp = "http://search-twitter-proxy.herokuapp.com/search/tweets"
-
-                            WS.url(stp).withQueryString("q" -> query).get().flatMap { tweetsResponse =>
-                              ???
-                            }
-                            ```
-                        </script>
-                    </section>
-                    <section data-markdown>
-                        <script type="text/template">
-                            #### Get Tweet JsObjects
-
-                            ```
-                            val tweets = (tweetsResponse.json \ "statuses").as[Seq[JsObject]]
-                            ```
-                        </script>
-                    </section>
-                    <section data-markdown>
-                        <script type="text/template">
-                            #### Get Sentiment For Each Tweet
-
-                            ```
                             val s = "http://text-processing.com/api/sentiment/"
-                            val tweetsSentimentFutures = tweets.map { tweet =>
-                              val text = (tweet \ "text").as[String]
-                              (tweet, WS.url(s).post(Map("text" -> Seq(text))).map(_.json.as[JsObject]))
-                            }
-                            ```
-                        </script>
-                    </section>
-                    <section data-markdown>
-                        <script type="text/template">
-                            #### Wrap Up The Futures
 
-                            ```
-                            val tweetsSentimentFuture = Future.traverse(tweetsSentimentFutures) { tsf =>
-                              tsf._2.map(_ ++ tsf._1)
-                            }
-                            ```
-                        </script>
-                    </section>
-                    <section data-markdown>
-                        <script type="text/template">
-                            #### When Everything is Done Return the Response
-
-                            ```
-                            tweetsSentimentFuture.map { tweetsWithSentiment =>
-                              Ok(Json.toJson(tweetsWithSentiment))
-                            }
+                            for {
+                              tweetsSentiments <- WS.url(stp).withQueryString("q" -> query).get().map { response =>
+                                (response.json \ "statuses").as[Seq[JsObject]].map { tweet =>
+                                  val postParams = Map("text" -> Seq((tweet \ "text").as[String]))
+                                  WS.url(s).post(postParams).map(_.json.as[JsObject] ++ tweet)
+                                }
+                              }
+                              tweetsAndSentiments <- Future.sequence(tweetsSentiments)
+                            } yield Ok(Json.toJson(tweetsAndSentiments))
                             ```
                         </script>
                     </section>
